@@ -5,6 +5,7 @@
 */
 include { FASTQC                 } from '../modules/nf-core/fastqc/main'
 include { MULTIQC                } from '../modules/nf-core/multiqc/main'
+include { CUTADAPT               } from '../modules/nf-core/cutadapt/main'
 include { paramsSummaryMap       } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -24,6 +25,7 @@ workflow MITODETECT {
 
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
+
     //
     // MODULE: Run FastQC
     //
@@ -32,6 +34,16 @@ workflow MITODETECT {
     )
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+
+    //
+    // MODULE: Run Cutadapt
+    //
+    CUTADAPT (
+        ch_samplesheet
+    )
+    ch_versions = ch_versions.mix(CUTADAPT.out.versions.first())
+    // CUTADAPT.out.reads
+
 
     //
     // Collate and save software versions
