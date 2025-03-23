@@ -1,15 +1,21 @@
 /*
+CMD: nextflow main.nf --input https://raw.githubusercontent.com/nf-core/test-datasets/refs/heads/fastqrepair/testdata/samplesheet_wellformed_reads.csv --outdir ./results -profile docker
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                 } from '../modules/nf-core/fastqc/main'
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { CUTADAPT               } from '../modules/nf-core/cutadapt/main'
-include { paramsSummaryMap       } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_mitodetect_pipeline'
+include { FASTQC                    } from '../modules/nf-core/fastqc/main'
+include { MULTIQC                   } from '../modules/nf-core/multiqc/main'
+include { CUTADAPT                  } from '../modules/nf-core/cutadapt/main'
+
+include { INDEX_GENOMES             } from '../subworkflows/local/index_genomes/main'
+include { FASTQ_CIRCULARALIGN_MTDNA } from '../subworkflows/local/fastq_circularalign_mtdna/main'
+
+include { paramsSummaryMap          } from 'plugin/nf-schema'
+include { paramsSummaryMultiqc      } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML    } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { methodsDescriptionText    } from '../subworkflows/local/utils_nfcore_mitodetect_pipeline'
+
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -21,28 +27,44 @@ workflow MITODETECT {
 
     take:
     ch_samplesheet // channel: samplesheet read in from --input
-    main:
 
+    main:
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
 
-    //
-    // MODULE: Run FastQC
-    //
-    FASTQC (
-        ch_samplesheet
-    )
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
-    ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+    // Index the nt and mt genomes
+    INDEX_GENOMES()
+    ch_versions = ch_versions.mix(INDEX_GENOMES.out.versions.first())
 
-    //
-    // MODULE: Run Cutadapt
-    //
-    CUTADAPT (
-        ch_samplesheet
-    )
-    ch_versions = ch_versions.mix(CUTADAPT.out.versions.first())
-    // CUTADAPT.out.reads
+    // Align the reads to the mt genome handling its circular feature
+    // FASTQ_CIRCULARALIGN_MTDNA(
+    //     ch_samplesheet,
+    //     INDEX_GENOMES.out.index_mt,
+    //     INDEX_GENOMES.out.index_mt_shifted,
+    //     INDEX_GENOMES.out.fasta_mt,
+    //     INDEX_GENOMES.out.fasta_mt_shifted
+    // )
+    // ch_versions = ch_versions.mix(FASTQ_CIRCULARALIGN_MTDNA.out.versions.first())
+
+
+
+    // //
+    // // MODULE: Run FastQC
+    // //
+    // FASTQC (
+    //     ch_samplesheet
+    // )
+    // ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
+    // ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+
+    // //
+    // // MODULE: Run Cutadapt
+    // //
+    // CUTADAPT (
+    //     ch_samplesheet
+    // )
+    // ch_versions = ch_versions.mix(CUTADAPT.out.versions.first())
+    // // CUTADAPT.out.reads
 
 
     //
@@ -97,8 +119,8 @@ workflow MITODETECT {
         []
     )
 
-    emit:multiqc_report = MULTIQC.out.report.toList() // channel: /path/to/multiqc_report.html
-    versions       = ch_versions                 // channel: [ path(versions.yml) ]
+    emit:multiqc_report = MULTIQC.out.report.toList()   // channel: /path/to/multiqc_report.html
+    versions       = ch_versions                        // channel: [ path(versions.yml) ]
 
 }
 
